@@ -1,1 +1,2 @@
-# CS4732-Project3
+# CS4732 Final Project
+# Joel Hokkanen, Kruti Shah
