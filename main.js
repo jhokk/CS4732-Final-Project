@@ -20,7 +20,7 @@ const Speed = {
     VSLOW: 1 / 512
 };
 
-let M = mat4(
+const M = mat4(
     vec4(-0.5, 1.5, -1.5, 0.5),
     vec4(1, -2.5, 2, -0.5),
     vec4(-0.5, 0, 0.5, 0),
@@ -88,7 +88,10 @@ function main() {
 function render() {
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    position[0] += Speed.SLOW;
+    //position = generateCatmullRomPoint(2, position[0] % 1);
+    updatePlayer();
+
+    //position[0] += Speed.SLOW;
     if (position[0] >= controlPoints[controlPoints.length - 4][0]) {
         generateControlPoint(position[0] + controlPoints.length - 3);
     }
@@ -113,13 +116,13 @@ function render() {
 	gl.drawArrays(gl.LINE_STRIP, 0, splinePoints.length / 2);
 
 
-    position = generateCatmullRomPoint(2, position[0] % 1);
-    updatePlayer();
+    
 
     drawPlayer();
 
     requestAnimationFrame(render);
 }
+
 
 function drawPlayer() {
 
@@ -133,6 +136,36 @@ function drawPlayer() {
 	gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
 
 	gl.drawArrays(gl.LINE_LOOP, 0, playerPoints.length);
+}
+
+function getSplineSlope(x) {
+    let controlPointIndex = 0;
+    while (controlPoints[controlPointIndex + 1][0] <= x) {
+        controlPointIndex++;
+    }
+
+    let cp1 = controlPoints[controlPointIndex];
+    let cp2 = controlPoints[controlPointIndex + 1];
+
+    let T1 = (x - cp1[0]) / (cp2[0] - cp1[0]) - 0.01;
+    let T2 = (x - cp1[0]) / (cp2[0] - cp1[0]) + 0.01;
+
+    let p1;
+    let p2;
+
+    if (T1 < 0)
+        p1 = generateCatmullRomPoint(controlPointIndex - 1, T1 + 1);
+    else
+        p1 = generateCatmullRomPoint(controlPointIndex, T1);
+
+    if (T2 > 1)
+        p2 = generateCatmullRomPoint(controlPointIndex + 1, T2 - 1);
+    else
+        p2 = generateCatmullRomPoint(controlPointIndex, T2);
+
+    let slope = (p2[1] - p1[1]) / (p2[0] - p1[0]);
+    return slope;
+    //console.log(slope);
 }
 
 
@@ -175,12 +208,32 @@ function generateControlPoint(x, init=false) {
 
 
 function updatePlayer() {
-    //position = add(position, scale(dt, velocity));
+    position = add(position, scale(dt, velocity));
 
-    //let forces = vec2(0, -9.81 * mass);
-    //velocity = add(velocity, scale(dt / mass, forces));
+    let fGravity = vec2(0, -9.81 * mass);
+    let fBasic = vec2(0,0);
+    let fNormal = vec2(0,0);
+    if (playerOnSpline()) {
+        let theta = Math.atan(getSplineSlope(position[0]));
+        //console.log(theta);
+        fNormal = scale( length(fGravity), vec2(Math.cos(theta), Math.sin(theta)) );
+        console.log(fNormal);
+    }
+    let acceleration = scale( mass, add(add(fGravity, fBasic), fNormal) );
 
-    if (yOffset > 0) {
-        yOffset = Math.max(0, yOffset-0.005);
+    velocity = add(velocity, scale(dt, acceleration));
+
+    //console.log(playerOnSpline());
+
+    
+}
+
+
+function playerOnSpline() {
+    let splinePoint = generateCatmullRomPoint(2, position[0] % 1);
+    if (position[1] - radius <= splinePoint[1]) {
+        return true;
+    } else {
+        return false;
     }
 }
