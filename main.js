@@ -115,16 +115,24 @@ function render() {
 
     position = generateCatmullRomPoint(2, position[0] % 1);
     updatePlayer();
+
+    drawPlayer();
+
+    requestAnimationFrame(render);
+}
+
+function drawPlayer() {
+
     gl.uniformMatrix4fv(gl.getUniformLocation(program, "modelMatrix"), false, flatten(translate(position[0], position[1]+yOffset, 0)));
 
+	let positionBuffer = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
 	gl.bufferData(gl.ARRAY_BUFFER, flatten(playerPoints), gl.STATIC_DRAW);
+	let positionLoc = gl.getAttribLocation(program, "vPosition");
     gl.enableVertexAttribArray(positionLoc);
 	gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
 
 	gl.drawArrays(gl.LINE_LOOP, 0, playerPoints.length);
-
-    requestAnimationFrame(render);
 }
 
 
