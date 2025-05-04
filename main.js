@@ -1,7 +1,6 @@
 'use strict';
 
-var gl;
-var program;
+var gl, program, canvas;
 
 let controlPoints = [];
 let position = vec2(0.0 , 0.0);
@@ -40,7 +39,7 @@ window.addEventListener("keypress", function(event) {
 
 // Initialize WebGL and simulation
 function main() {
-    const canvas = document.getElementById("webgl");
+    canvas = document.getElementById("webgl");
     gl = WebGLUtils.setupWebGL(canvas, null);
     if (!gl) { alert("WebGL isn't available"); return; }
 
@@ -53,20 +52,18 @@ function main() {
     gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, flatten(vec2(0, 0)), gl.DYNAMIC_DRAW);
 
-    const vPosition = gl.getAttribLocation(program, "vPosition");
-    gl.vertexAttribPointer(vPosition, 2, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(vPosition);
+    setBufferPos("vPosition");
     
-    gl.uniformMatrix4fv(gl.getUniformLocation(program, "modelMatrix"), false, flatten(mat4()));
+    updateMatrix("modelMatrix", mat4());
 
     let cameraMatrix = lookAt( vec3(0, 0, 0), vec3(0, 0, 0), vec3(0, 1, 0) );
-    gl.uniformMatrix4fv(gl.getUniformLocation(program, "cameraMatrix"), false, flatten(cameraMatrix));
+    updateMatrix("cameraMatrix", cameraMatrix);
 
+    // set initial color
 	gl.uniform4fv(gl.getUniformLocation(program, 'vColor'), flatten([0.0, 0.0, 0.0, 1.0]));
 
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
     
     // Generate initial control points
     for (let i = -2; i < 5; i++) {
@@ -94,28 +91,22 @@ function render() {
     }
 
     let cameraMatrix = lookAt( vec3(position[0], 0, 1), vec3(position[0], 0, 0), vec3(0, 1, 0) );
-    gl.uniformMatrix4fv(gl.getUniformLocation(program, "cameraMatrix"), false, flatten(cameraMatrix));
 
-    gl.uniformMatrix4fv(gl.getUniformLocation(program, "modelMatrix"), false, flatten(mat4()));
+    updateMatrix("cameraMatrix", cameraMatrix);
+    updateMatrix("modelMatrix", mat4());
 
 	let splinePoints = generateCatmullRomCurve();
     
 	// Buffer
-	let positionBuffer = gl.createBuffer();
-	gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-	gl.bufferData(gl.ARRAY_BUFFER, splinePoints, gl.STATIC_DRAW);
-
+    uploadData(splinePoints);
 	// Attribute
-	let positionLoc = gl.getAttribLocation(program, "vPosition");
-	gl.enableVertexAttribArray(positionLoc);
-	gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
-
+    setBufferPos("vPosition");
+	
 	gl.drawArrays(gl.LINE_STRIP, 0, splinePoints.length / 2);
 
-
     position = generateCatmullRomPoint(2, position[0] % 1);
-    updatePlayer();
 
+    updatePlayer();
     drawPlayer();
 
     requestAnimationFrame(render);
@@ -123,54 +114,11 @@ function render() {
 
 function drawPlayer() {
 
-    gl.uniformMatrix4fv(gl.getUniformLocation(program, "modelMatrix"), false, flatten(translate(position[0], position[1]+yOffset, 0)));
-
-	let positionBuffer = gl.createBuffer();
-	gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-	gl.bufferData(gl.ARRAY_BUFFER, flatten(playerPoints), gl.STATIC_DRAW);
-	let positionLoc = gl.getAttribLocation(program, "vPosition");
-    gl.enableVertexAttribArray(positionLoc);
-	gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
-
+    updateMatrix("modelMatrix", (translate(position[0], position[1]+yOffset, 0)));
+	setBuffer(playerPoints, "vPosition");
+    
+   
 	gl.drawArrays(gl.LINE_LOOP, 0, playerPoints.length);
-}
-
-
-function generateCatmullRomCurve(segments = 20) {
-	let curve = [];
-	
-	for (var i = 1; i < controlPoints.length-2; i++) {
-		
-        for ( var j = 0; j < segments; j++ ) {
-			curve.push( generateCatmullRomPoint(i, j /segments) );
-		}
-	}
-	
-	return new Float32Array( flatten(curve) );
-}
-
-
-function generateCatmullRomPoint(i, T) {
-	let Bx = vec4(controlPoints[i-1][0], controlPoints[i][0], controlPoints[i+1][0], controlPoints[i+2][0]);
-	let By = vec4(controlPoints[i-1][1], controlPoints[i][1], controlPoints[i+1][1], controlPoints[i+2][1]);
-	
-	let U = vec4(T*T*T, T*T, T, 1);
-	
-	let x = dot( mult(M, Bx), U );
-	let y = dot( mult(M, By), U );
-	
-	return vec2(x, y);
-}
-
-
-function generateControlPoint(x, init=false) {
-    if (!init) {
-        controlPoints.shift();
-    }
-
-    let point = vec2(x, Math.random() * 2.0 - 1);
-    point[1] *= 0.85;
-    controlPoints.push(point);
 }
 
 
@@ -183,4 +131,66 @@ function updatePlayer() {
     if (yOffset > 0) {
         yOffset = Math.max(0, yOffset-0.005);
     }
+}
+
+
+
+// v GENERATION FUNCTIONS: v
+function generateCatmullRomPoint(i, T) {
+	let Bx = vec4(controlPoints[i-1][0], controlPoints[i][0], controlPoints[i+1][0], controlPoints[i+2][0]);
+	let By = vec4(controlPoints[i-1][1], controlPoints[i][1], controlPoints[i+1][1], controlPoints[i+2][1]);
+	
+	let U = vec4(T*T*T, T*T, T, 1);
+	
+	let x = dot( mult(M, Bx), U );
+	let y = dot( mult(M, By), U );
+	
+	return vec2(x, y);
+}
+function generateCatmullRomCurve(segments = 20) {
+	let curve = [];
+	
+	for (var i = 1; i < controlPoints.length-2; i++) {
+		
+        for ( var j = 0; j < segments; j++ ) {
+			curve.push( generateCatmullRomPoint(i, j /segments) );
+		}
+	}
+	return new Float32Array( flatten(curve) );
+}
+function generateControlPoint(x, init=false) {
+    if (!init) {
+        controlPoints.shift();
+    }
+
+    let point = vec2(x, Math.random() * 2.0 - 1);
+    point[1] *= 0.85;
+    controlPoints.push(point);
+}
+
+function updateMatrix(matrixName, matrixValue) {  
+    let matrixLoc = gl.getUniformLocation(program, matrixName);
+    gl.uniformMatrix4fv(matrixLoc, false, flatten(matrixValue));
+}
+// v BUFFER FUNCTIONS: v
+function setBuffer(array, buffName) {
+    var buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    // uploading buffer data
+    gl.bufferData(gl.ARRAY_BUFFER, flatten(array), gl.STATIC_DRAW);
+
+    var position = gl.getAttribLocation(program, buffName);
+    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(position); // enable
+}
+function uploadData(array) {
+    var buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    // uploading buffer data
+    gl.bufferData(gl.ARRAY_BUFFER, flatten(array), gl.STATIC_DRAW);
+}
+function setBufferPos(buffName) {
+    var position = gl.getAttribLocation(program, buffName);
+    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(position); // enable
 }
