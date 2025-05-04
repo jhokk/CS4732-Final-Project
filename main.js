@@ -4,11 +4,14 @@ var gl;
 var program;
 
 let controlPoints = [];
-let position = [0.0 , 0.0];
+let position = vec2(0.0 , 0.0);
+let velocity = vec2(0.0 , 0.0);
 let playerPoints = [];
 
-//let dt = 0.005;
+let dt = 0.001;
 let radius = 0.025;
+let mass = 1.0;
+let yOffset = 0;
 
 const Speed = {
     FAST: 1 / 64,
@@ -29,8 +32,8 @@ let M = mat4(
 window.addEventListener("keypress", function(event) {
     var key = event.key;
     switch (key) {
-        case 'a':
-            // do something
+        case ' ':
+            yOffset += 0.5;
             break;
     }
 }, false);
@@ -65,13 +68,19 @@ function main() {
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
     
+    // Generate initial control points
     for (let i = -2; i < 5; i++) {
         generateControlPoint(i, true);
     }
 
+    // Generate circle points
     for (let i = 0; i < 360; i += 15) {
         playerPoints.push( vec2(radius * Math.cos(radians(i)), radius * Math.sin(radians(i))) );
     }
+
+    // Generate initial position
+    position = generateCatmullRomPoint(2, position[0] % 1);
+    position[1] += 5 * radius;
 
     render();
 }
@@ -80,11 +89,11 @@ function render() {
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     position[0] += Speed.SLOW;
-    if (position[0] % 1 === 0) {
+    if (position[0] >= controlPoints[controlPoints.length - 4][0]) {
         generateControlPoint(position[0] + controlPoints.length - 3);
     }
 
-    let cameraMatrix = lookAt( vec3(position[0], position[1], 1), vec3(position[0], position[1], 0), vec3(0, 1, 0) );
+    let cameraMatrix = lookAt( vec3(position[0], 0, 1), vec3(position[0], 0, 0), vec3(0, 1, 0) );
     gl.uniformMatrix4fv(gl.getUniformLocation(program, "cameraMatrix"), false, flatten(cameraMatrix));
 
     gl.uniformMatrix4fv(gl.getUniformLocation(program, "modelMatrix"), false, flatten(mat4()));
@@ -104,8 +113,9 @@ function render() {
 	gl.drawArrays(gl.LINE_STRIP, 0, splinePoints.length / 2);
 
 
-    let pos = generateCatmullRomPoint(2, position[0] % 1);
-    gl.uniformMatrix4fv(gl.getUniformLocation(program, "modelMatrix"), false, flatten(translate(pos[0], pos[1]+radius, 0)));
+    position = generateCatmullRomPoint(2, position[0] % 1);
+    updatePlayer();
+    gl.uniformMatrix4fv(gl.getUniformLocation(program, "modelMatrix"), false, flatten(translate(position[0], position[1]+yOffset, 0)));
 
 	gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
 	gl.bufferData(gl.ARRAY_BUFFER, flatten(playerPoints), gl.STATIC_DRAW);
@@ -153,4 +163,16 @@ function generateControlPoint(x, init=false) {
     let point = vec2(x, Math.random() * 2.0 - 1);
     point[1] *= 0.85;
     controlPoints.push(point);
+}
+
+
+function updatePlayer() {
+    //position = add(position, scale(dt, velocity));
+
+    //let forces = vec2(0, -9.81 * mass);
+    //velocity = add(velocity, scale(dt / mass, forces));
+
+    if (yOffset > 0) {
+        yOffset = Math.max(0, yOffset-0.005);
+    }
 }
