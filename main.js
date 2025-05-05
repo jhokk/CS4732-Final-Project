@@ -5,12 +5,12 @@ var program;
 
 let controlPoints = [];
 let position = vec2(0.0 , 0.0);
-let velocity = vec2(0.0 , 0.0);
+let velocity = vec2(10.0 , 0.0);
 let playerPoints = [];
 
 let dt = 0.001;
 let radius = 0.025;
-let mass = 1.0;
+let mass = 2.0;
 let yOffset = 0;
 
 const Speed = {
@@ -165,7 +165,6 @@ function getSplineSlope(x) {
 
     let slope = (p2[1] - p1[1]) / (p2[0] - p1[0]);
     return slope;
-    //console.log(slope);
 }
 
 
@@ -196,6 +195,17 @@ function generateCatmullRomPoint(i, T) {
 }
 
 
+function getSplinePoint(x) {
+    let controlPointIndex = 0;
+    while (controlPoints[controlPointIndex + 1][0] <= x) {
+        controlPointIndex++;
+    }
+
+    let splinePoint = generateCatmullRomPoint(controlPointIndex, x % 1);
+    return splinePoint;
+}
+
+
 function generateControlPoint(x, init=false) {
     if (!init) {
         controlPoints.shift();
@@ -207,33 +217,47 @@ function generateControlPoint(x, init=false) {
 }
 
 
+let collisionCooldown = 0;
 function updatePlayer() {
-    position = add(position, scale(dt, velocity));
-
     let fGravity = vec2(0, -9.81 * mass);
     let fBasic = vec2(0,0);
     let fNormal = vec2(0,0);
-    if (playerOnSpline()) {
-        let theta = Math.atan(getSplineSlope(position[0]));
-        //console.log(theta);
-        fNormal = scale( length(fGravity), vec2(Math.cos(theta), Math.sin(theta)) );
-        console.log(fNormal);
-    }
     let acceleration = scale( mass, add(add(fGravity, fBasic), fNormal) );
 
     velocity = add(velocity, scale(dt, acceleration));
 
-    //console.log(playerOnSpline());
-
+    let p = detectCollision();
+    if (p) {
+        if (collisionCooldown === 0) {
+            collisionCooldown = 15;
+            let slope = getSplineSlope(p[0]);
+            let normal = normalize(vec2(-1 * slope, 1));
+            let component = scale( dot(velocity, normal), normal );
+            velocity = scale( 0.8, subtract(velocity, scale(2, component)) );
+        }
+        else {
+            collisionCooldown--;
+        }
+    } else {
+        collisionCooldown = 0;
+    }
     
+    position = add(position, scale(dt, velocity));
 }
 
+function detectCollision() {
+    let checkPoints = [];
 
-function playerOnSpline() {
-    let splinePoint = generateCatmullRomPoint(2, position[0] % 1);
-    if (position[1] - radius <= splinePoint[1]) {
-        return true;
-    } else {
-        return false;
+    for (let offset = -1 * radius; offset <= radius; offset += radius / 8) {
+
+        let splinePoint = getSplinePoint(position[0] + offset);
+        checkPoints.push(splinePoint);
+    }
+
+    for (let p of checkPoints) {
+        let dist = length(subtract(p, position));
+        if (dist <= radius) {
+            return p;
+        }
     }
 }
