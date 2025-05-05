@@ -5,7 +5,7 @@ var gl, program, canvas;
 let controlPoints = [];
 let position = vec2(0.0 , 0.0);
 let velocity = vec2(0.0 , 0.0);
-let playerPoints = [];
+let circlePoints = [];
 
 let dt = 0.001;
 let radius = 0.025;
@@ -72,7 +72,7 @@ function main() {
 
     // Generate circle points
     for (let i = 0; i < 360; i += 15) {
-        playerPoints.push( vec2(radius * Math.cos(radians(i)), radius * Math.sin(radians(i))) );
+        circlePoints.push( vec2(radius * Math.cos(radians(i)), radius * Math.sin(radians(i))) );
     }
 
     // Generate initial position
@@ -112,13 +112,54 @@ function render() {
     requestAnimationFrame(render);
 }
 
-function drawPlayer() {
+let stack = [];
+//let pointsArray = [];
+let colorsArray = [];
+let bodyPts = [];
+let model = mat4();
+let transform;
 
-    updateMatrix("modelMatrix", (translate(position[0], position[1]+yOffset, 0)));
-	setBuffer(playerPoints, "vPosition");
+let theta = 0.01;
+let runSpeed = 40;
+
+function drawPlayer() {
+    model = translate(position[0], position[1]+0.15, 0.0);
+    updateMatrix("modelMatrix", model);
+
+    // draw main BODY
+    bodyPts.push(vec2(0.0, 0.0));
+    bodyPts.push(vec2(0.0, 0.2));
+
+    setBuffer(bodyPts, "vPosition");
+    //gl.drawArrays(gl.LINE_LOOP, 0, bodyPts.length);
+
+    stack.push(model);
+        // HEAD
+        updateMatrix("modelMatrix", mult(model, (translate(0.0, 0.23, 0.0))));
+        
+        setBuffer(circlePoints, "vPosition");
+	    gl.drawArrays(gl.LINE_LOOP, 0, circlePoints.length);
     
-   
-	gl.drawArrays(gl.LINE_LOOP, 0, playerPoints.length);
+        // LEGS
+        // right leg
+        setBuffer(bodyPts, "vPosition");
+        transform = mult(translate(0.0, 0.0, 0.0), rotateZ(Math.sin(5*theta)*runSpeed));
+        model = mult(model, transform);
+        
+        updateMatrix("modelMatrix", mult(model, mult(scalem(0.5, 0.5, 1.0), rotateZ(-140))));
+        gl.drawArrays(gl.LINE_LOOP, 0, bodyPts.length);
+
+        stack.push(model);
+            transform = mult(translate(0.0, -0.0, 0.0), mult(scalem(1.0, 1.0, 1.0), rotateZ(0)));
+            model = mult(model, transform);
+            
+            updateMatrix("modelMatrix", model);
+            gl.drawArrays(gl.LINE_LOOP, 0, bodyPts.length);
+
+}
+function drawModel(modelMat) {
+    gl.uniformMatrix4fv(modelMatrixLoc, false, flatten(modelMat));
+    gl.drawArrays(gl.LINE_LOOP, 0, pointsArray.length);
 }
 
 
